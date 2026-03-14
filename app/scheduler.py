@@ -15,23 +15,32 @@ async def ping_users(bot):
             return
         
         now = datetime.utcnow()
-        current_hour = now.hour
+        utc_hour = now.hour
         
         for settings in settings_list:
             if not settings.ping_enabled:
                 continue
             
+            local_hour = (utc_hour + settings.timezone_offset) % 24
+            
             if settings.ping_start_hour is not None and settings.ping_end_hour is not None:
-                if not (settings.ping_start_hour <= current_hour < settings.ping_end_hour):
-                    continue
+                start = settings.ping_start_hour
+                end = settings.ping_end_hour
+                
+                if start <= end:
+                    if not (start <= local_hour < end):
+                        continue
+                else:
+                    if not (local_hour >= start or local_hour < end):
+                        continue
             
             if settings.last_ping:
-                hours_since_last = (now - settings.last_ping).total_seconds() / 3600
-                if hours_since_last < settings.min_interval_hours:
+                minutes_since_last = (now - settings.last_ping).total_seconds() / 60
+                if minutes_since_last < settings.min_interval_minutes:
                     continue
             
-            interval = random.randint(settings.min_interval_hours, settings.max_interval_hours)
-            if not settings.last_ping or (now - settings.last_ping).total_seconds() / 3600 >= interval:
+            interval = random.randint(settings.min_interval_minutes, settings.max_interval_minutes)
+            if not settings.last_ping or (now - settings.last_ping).total_seconds() / 60 >= interval:
                 try:
                     keyboard = [
                         [InlineKeyboardButton(f"{MOOD_EMOJIS[i]} {i}", callback_data=f"mood_{i}") for i in range(1, 6)]

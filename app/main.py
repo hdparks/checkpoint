@@ -93,13 +93,21 @@ async def api_stats(db: Session = Depends(get_db)):
 async def api_settings(db: Session = Depends(get_db)):
     settings = db.query(Settings).first()
     if not settings:
-        return {"ping_enabled": True, "min_interval_hours": 1, "max_interval_hours": 3, "ping_start_hour": None, "ping_end_hour": None}
+        return {
+            "ping_enabled": True,
+            "min_interval_minutes": 30,
+            "max_interval_minutes": 120,
+            "ping_start_hour": None,
+            "ping_end_hour": None,
+            "timezone_offset": 0
+        }
     return {
         "ping_enabled": settings.ping_enabled,
-        "min_interval_hours": settings.min_interval_hours,
-        "max_interval_hours": settings.max_interval_hours,
+        "min_interval_minutes": settings.min_interval_minutes,
+        "max_interval_minutes": settings.max_interval_minutes,
         "ping_start_hour": settings.ping_start_hour,
-        "ping_end_hour": settings.ping_end_hour
+        "ping_end_hour": settings.ping_end_hour,
+        "timezone_offset": settings.timezone_offset
     }
 
 
@@ -112,14 +120,16 @@ async def update_settings(data: dict, db: Session = Depends(get_db)):
     
     if "ping_enabled" in data:
         settings.ping_enabled = data["ping_enabled"]
-    if "min_interval_hours" in data:
-        settings.min_interval_hours = data["min_interval_hours"]
-    if "max_interval_hours" in data:
-        settings.max_interval_hours = data["max_interval_hours"]
+    if "min_interval_minutes" in data:
+        settings.min_interval_minutes = data["min_interval_minutes"]
+    if "max_interval_minutes" in data:
+        settings.max_interval_minutes = data["max_interval_minutes"]
     if "ping_start_hour" in data:
         settings.ping_start_hour = data["ping_start_hour"]
     if "ping_end_hour" in data:
         settings.ping_end_hour = data["ping_end_hour"]
+    if "timezone_offset" in data:
+        settings.timezone_offset = data["timezone_offset"]
     
     db.commit()
     return {"success": True}
@@ -136,6 +146,16 @@ async def create_entry(data: dict, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(entry)
     return {"id": entry.id, "mood": entry.mood, "note": entry.note, "created_at": entry.created_at.isoformat()}
+
+
+@app.delete("/api/entries/{entry_id}")
+async def delete_entry(entry_id: int, db: Session = Depends(get_db)):
+    entry = db.query(Entry).filter(Entry.id == entry_id).first()
+    if entry:
+        db.delete(entry)
+        db.commit()
+        return {"success": True}
+    return {"success": False, "error": "Entry not found"}
 
 
 if __name__ == "__main__":

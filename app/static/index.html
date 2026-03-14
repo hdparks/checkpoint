@@ -5,7 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Checkpoint - Daily Mood Tracker</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <style>
+        :root {
+            --bg-primary: #f5f5f5;
+            --bg-card: #ffffff;
+            --text-primary: #333333;
+            --text-secondary: #666666;
+            --text-muted: #999999;
+            --border-color: #eeeeee;
+            --accent-color: #667eea;
+            --accent-hover: #5568d3;
+            --shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        [data-theme="dark"] {
+            --bg-primary: #1a1a2e;
+            --bg-card: #16213e;
+            --text-primary: #e0e0e0;
+            --text-secondary: #a0a0a0;
+            --text-muted: #707070;
+            --border-color: #2a2a4a;
+            --shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
         * {
             margin: 0;
             padding: 0;
@@ -13,9 +34,22 @@
         }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f5f5f5;
-            color: #333;
+            background: var(--bg-primary);
+            color: var(--text-primary);
             line-height: 1.6;
+            transition: background 0.3s, color 0.3s;
+        }
+        .theme-toggle {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1.2rem;
+            transition: background 0.2s;
+        }
+        .theme-toggle:hover {
+            background: rgba(255,255,255,0.3);
         }
         .container {
             max-width: 1200px;
@@ -28,6 +62,9 @@
             padding: 30px;
             border-radius: 12px;
             margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
         header h1 {
             font-size: 2rem;
@@ -36,6 +73,9 @@
         header p {
             opacity: 0.9;
         }
+        .header-content {
+            flex: 1;
+        }
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -43,14 +83,15 @@
             margin-bottom: 30px;
         }
         .stat-card {
-            background: white;
+            background: var(--bg-card);
             padding: 25px;
             border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            box-shadow: var(--shadow);
+            transition: background 0.3s, box-shadow 0.3s;
         }
         .stat-card h3 {
             font-size: 0.9rem;
-            color: #666;
+            color: var(--text-secondary);
             margin-bottom: 8px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
@@ -58,7 +99,7 @@
         .stat-card .value {
             font-size: 2.5rem;
             font-weight: 700;
-            color: #667eea;
+            color: var(--accent-color);
         }
         .grid-2 {
             display: grid;
@@ -70,14 +111,16 @@
             .grid-2 { grid-template-columns: 1fr; }
         }
         .card {
-            background: white;
+            background: var(--bg-card);
             padding: 25px;
             border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            box-shadow: var(--shadow);
+            transition: background 0.3s, box-shadow 0.3s;
         }
         .card h2 {
             margin-bottom: 20px;
             font-size: 1.3rem;
+            color: var(--text-primary);
         }
         .entries-list {
             max-height: 400px;
@@ -85,10 +128,11 @@
         }
         .entry {
             padding: 15px;
-            border-bottom: 1px solid #eee;
+            border-bottom: 1px solid var(--border-color);
             display: flex;
             align-items: center;
             gap: 15px;
+            transition: border-color 0.3s;
         }
         .entry:last-child { border-bottom: none; }
         .mood-emoji {
@@ -98,11 +142,11 @@
             flex: 1;
         }
         .entry-note {
-            color: #666;
+            color: var(--text-secondary);
             font-size: 0.9rem;
         }
         .entry-time {
-            color: #999;
+            color: var(--text-muted);
             font-size: 0.8rem;
         }
         .settings-form {
@@ -117,13 +161,16 @@
         }
         .form-group label {
             font-weight: 500;
-            color: #555;
+            color: var(--text-secondary);
         }
         .form-group input[type="number"] {
             padding: 10px;
-            border: 1px solid #ddd;
+            border: 1px solid var(--border-color);
             border-radius: 6px;
             font-size: 1rem;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            transition: background 0.3s, color 0.3s, border-color 0.3s;
         }
         .toggle-switch {
             display: flex;
@@ -162,15 +209,31 @@
         .empty-state {
             text-align: center;
             padding: 40px;
-            color: #999;
+            color: var(--text-muted);
+        }
+        .delete-btn {
+            background: #ff4757;
+            color: white;
+            border: none;
+            padding: 6px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: background 0.2s;
+        }
+        .delete-btn:hover {
+            background: #ff6b7a;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>Checkpoint</h1>
-            <p>Daily mood tracking made simple</p>
+            <div class="header-content">
+                <h1>Checkpoint</h1>
+                <p>Daily mood tracking made simple</p>
+            </div>
+            <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">🌙</button>
         </header>
         
         <div class="stats-grid">
@@ -205,12 +268,12 @@
                         <label for="pingEnabled">Enable Random Pings</label>
                     </div>
                     <div class="form-group">
-                        <label>Min Interval (hours)</label>
-                        <input type="number" id="minInterval" value="1" min="1" max="24">
+                        <label>Min Interval (minutes)</label>
+                        <input type="number" id="minInterval" value="30" min="1">
                     </div>
                     <div class="form-group">
-                        <label>Max Interval (hours)</label>
-                        <input type="number" id="maxInterval" value="3" min="1" max="24">
+                        <label>Max Interval (minutes)</label>
+                        <input type="number" id="maxInterval" value="120" min="1">
                     </div>
                     <div class="form-group">
                         <label>Ping Start Hour (0-23, leave empty for any)</label>
@@ -237,6 +300,43 @@
         const MOOD_EMOJIS = {1: '😢', 2: '😕', 3: '😐', 4: '🙂', 5: '😄'};
         let chart = null;
         
+        function initTheme() {
+            const saved = localStorage.getItem('theme') || 'light';
+            if (saved === 'dark') {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                document.querySelector('.theme-toggle').textContent = '☀️';
+            }
+        }
+        
+        function toggleTheme() {
+            const current = document.documentElement.getAttribute('data-theme');
+            const toggle = document.querySelector('.theme-toggle');
+            if (current === 'dark') {
+                document.documentElement.setAttribute('data-theme', 'light');
+                localStorage.setItem('theme', 'light');
+                toggle.textContent = '🌙';
+            } else {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                localStorage.setItem('theme', 'dark');
+                toggle.textContent = '☀️';
+            }
+            updateChartColors();
+        }
+        
+        function getChartColors() {
+            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+            return {
+                border: isDark ? '#667eea' : '#667eea',
+                bg: isDark ? 'rgba(102, 126, 234, 0.2)' : 'rgba(102, 126, 234, 0.1)',
+                text: isDark ? '#e0e0e0' : '#333'
+            };
+        }
+        
+        function updateChartColors() {
+            const entries = document.querySelectorAll('.entry');
+            if (entries.length > 0) loadEntries();
+        }
+        
         async function loadStats() {
             const res = await fetch('/api/stats');
             const stats = await res.json();
@@ -250,8 +350,8 @@
             const res = await fetch('/api/settings');
             const settings = await res.json();
             document.getElementById('pingEnabled').checked = settings.ping_enabled;
-            document.getElementById('minInterval').value = settings.min_interval_hours;
-            document.getElementById('maxInterval').value = settings.max_interval_hours;
+            document.getElementById('minInterval').value = settings.min_interval_minutes;
+            document.getElementById('maxInterval').value = settings.max_interval_minutes;
             document.getElementById('pingStartHour').value = settings.ping_start_hour ?? '';
             document.getElementById('pingEndHour').value = settings.ping_end_hour ?? '';
         }
@@ -261,8 +361,8 @@
             const endHour = document.getElementById('pingEndHour').value;
             const data = {
                 ping_enabled: document.getElementById('pingEnabled').checked,
-                min_interval_hours: parseInt(document.getElementById('minInterval').value),
-                max_interval_hours: parseInt(document.getElementById('maxInterval').value),
+                min_interval_minutes: parseInt(document.getElementById('minInterval').value),
+                max_interval_minutes: parseInt(document.getElementById('maxInterval').value),
                 ping_start_hour: startHour ? parseInt(startHour) : null,
                 ping_end_hour: endHour ? parseInt(endHour) : null
             };
@@ -292,16 +392,45 @@
                         ${e.note ? `<div class="entry-note">${e.note}</div>` : ''}
                     </div>
                     <div class="entry-time">${new Date(e.created_at).toLocaleString()}</div>
+                    <button class="delete-btn" onclick="deleteEntry(${e.id})">Delete</button>
                 </div>
             `).join('');
             
             updateChart(entries);
         }
         
+        async function deleteEntry(id) {
+            if (!confirm('Delete this entry?')) return;
+            await fetch('/api/entries/' + id, { method: 'DELETE' });
+            loadEntries();
+            loadStats();
+        }
+        
         function updateChart(entries) {
             const sorted = [...entries].reverse().slice(-30);
-            const labels = sorted.map(e => new Date(e.created_at).toLocaleDateString());
-            const moods = sorted.map(e => e.mood);
+            if (sorted.length === 0) return;
+            
+            const HOUR_MS = 60 * 60 * 1000;
+            
+            const segments = [];
+            let currentSegment = [];
+            
+            for (let i = 0; i < sorted.length; i++) {
+                const entry = sorted[i];
+                const currentTime = new Date(entry.created_at).getTime();
+                
+                if (i === 0) {
+                    currentSegment.push({ x: currentTime, y: entry.mood });
+                } else {
+                    const prevTime = new Date(sorted[i - 1].created_at).getTime();
+                    if (currentTime - prevTime > HOUR_MS) {
+                        segments.push(currentSegment);
+                        currentSegment = [];
+                    }
+                    currentSegment.push({ x: currentTime, y: entry.mood });
+                }
+            }
+            if (currentSegment.length > 0) segments.push(currentSegment);
             
             if (chart) chart.destroy();
             
@@ -309,18 +438,31 @@
             chart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels,
-                    datasets: [{
+                    datasets: segments.map(seg => ({
                         label: 'Mood',
-                        data: moods,
+                        data: seg,
                         borderColor: '#667eea',
                         backgroundColor: 'rgba(102, 126, 234, 0.1)',
                         fill: true,
-                        tension: 0.4
-                    }]
+                        stepped: 'after'
+                    }))
                 },
                 options: {
                     scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: 'day',
+                                displayFormats: {
+                                    day: 'MMM d',
+                                    hour: 'MMM d HH:mm'
+                                }
+                            },
+                            ticks: {
+                                maxRotation: 45,
+                                minRotation: 0
+                            }
+                        },
                         y: { min: 0, max: 5, ticks: { stepSize: 1 } }
                     }
                 }
@@ -330,6 +472,7 @@
         loadStats();
         loadSettings();
         loadEntries();
+        initTheme();
         setInterval(() => { loadStats(); loadEntries(); }, 30000);
     </script>
 </body>

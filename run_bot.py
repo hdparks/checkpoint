@@ -1,6 +1,4 @@
 import os
-import asyncio
-import signal
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
@@ -32,7 +30,7 @@ from app.bot import (
 scheduler = AsyncIOScheduler()
 
 
-async def run_bot():
+def run_bot():
     application = Application.builder().token(TOKEN).build()
     
     application.add_handler(CommandHandler("start", start_command))
@@ -57,23 +55,9 @@ async def run_bot():
     scheduler.start()
     print("Scheduler started!")
     
-    shutdown_event = asyncio.Event()
-    
-    def signal_handler():
-        shutdown_event.set()
-    
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        asyncio.get_event_loop().add_signal_handler(sig, signal_handler)
-    
-    async with application:
-        print("Starting bot")
-        await application.start()
-        print("Bot started!")
-        await shutdown_event.wait()
-        scheduler.shutdown()
-        await application.stop()
+    application.run_polling()
 
 
 if __name__ == "__main__":
     print("Starting Checkpoint Bot...")
-    asyncio.run(run_bot())
+    run_bot()

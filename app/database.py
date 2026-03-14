@@ -23,28 +23,15 @@ class Settings(Base):
     id = Column(Integer, primary_key=True, index=True)
     telegram_id = Column(Integer, unique=True, nullable=False)
     ping_enabled = Column(Boolean, default=True)
-    min_interval_hours = Column(Integer, default=1)
-    max_interval_hours = Column(Integer, default=3)
+    min_interval_minutes = Column(Integer, default=30)
+    max_interval_minutes = Column(Integer, default=120)
     ping_start_hour = Column(Integer, nullable=True)
     ping_end_hour = Column(Integer, nullable=True)
+    timezone_offset = Column(Integer, default=0)
     last_ping = Column(DateTime, nullable=True)
 
 
 Base.metadata.create_all(bind=engine)
-
-from sqlalchemy import text
-
-with engine.connect() as conn:
-    try:
-        conn.execute(text("ALTER TABLE settings ADD COLUMN ping_start_hour INTEGER"))
-        conn.commit()
-    except Exception:
-        pass
-    try:
-        conn.execute(text("ALTER TABLE settings ADD COLUMN ping_end_hour INTEGER"))
-        conn.commit()
-    except Exception:
-        pass
 
 
 def get_db():
