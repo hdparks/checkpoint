@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Checkpoint - Daily Mood Tracker</title>
+    <script src="https://cdn.jsdelivr.net/npm/@telegram-apps/sdk"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <style>
@@ -224,6 +225,58 @@
         .delete-btn:hover {
             background: #ff6b7a;
         }
+        .export-btns {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .export-btns .btn {
+            flex: 1;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .insights-card {
+            background: var(--bg-card);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            margin-bottom: 30px;
+        }
+        .insights-card h2 {
+            margin-bottom: 15px;
+            color: var(--text-primary);
+        }
+        .insight-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .insight-row:last-child { border-bottom: none; }
+        .insight-label { color: var(--text-secondary); }
+        .insight-value { font-weight: 600; color: var(--text-primary); }
+        .insight-best { color: #2e7d32; }
+        .insight-worst { color: #c62828; }
+        .user-filter {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .user-filter label {
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+        .user-filter select {
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 1rem;
+            background: var(--bg-card);
+            color: var(--text-primary);
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -235,6 +288,14 @@
             </div>
             <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">🌙</button>
         </header>
+        
+        <div class="user-filter">
+            <label for="userSelect">Filter by User:</label>
+            <select id="userSelect" onchange="filterByUser(this.value)">
+                <option value="">All Users</option>
+            </select>
+            <span id="currentUserLabel" style="color: var(--text-muted); font-size: 0.9rem;"></span>
+        </div>
         
         <div class="stats-grid">
             <div class="stat-card">
@@ -255,12 +316,19 @@
             </div>
         </div>
         
+        <div class="insights-card">
+            <h2>Insights</h2>
+            <div id="insightsContent">
+                <div class="empty-state">No data yet</div>
+            </div>
+        </div>
+        
         <div class="grid-2">
             <div class="card">
-                <h2>Mood Over Time</h2>
-                <canvas id="moodChart" height="200"></canvas>
+                <h2>Mood Distribution</h2>
+                <canvas id="distributionChart" height="200"></canvas>
             </div>
-            <div class="card">
+            <div class="card" id="settingsSection">
                 <h2>Settings</h2>
                 <div class="settings-form">
                     <div class="toggle-switch">
@@ -283,9 +351,22 @@
                         <label>Ping End Hour (0-23, leave empty for any)</label>
                         <input type="number" id="pingEndHour" min="0" max="23" placeholder="e.g. 22">
                     </div>
+                    <div class="form-group">
+                        <label>Timezone Offset (hours from UTC, e.g., -5, 0, 8)</label>
+                        <input type="number" id="timezoneOffset" placeholder="e.g. -5">
+                    </div>
                     <button class="btn" onclick="saveSettings()">Save Settings</button>
+                    <div class="export-btns">
+                        <a href="/api/export/csv" class="btn" target="_blank">Export CSV</a>
+                        <button class="btn" onclick="exportJSON()">Export JSON</button>
+                    </div>
                 </div>
             </div>
+        </div>
+        
+        <div class="card" style="margin-bottom: 30px;">
+            <h2>Mood Over Time</h2>
+            <canvas id="moodChart" height="100"></canvas>
         </div>
         
         <div class="card">
@@ -299,6 +380,13 @@
     <script>
         const MOOD_EMOJIS = {1: '😢', 2: '😕', 3: '😐', 4: '🙂', 5: '😄'};
         let chart = null;
+        let userTimezoneOffset = 0;
+
+        function toLocalTime(utcDate) {
+            const date = new Date(utcDate);
+            date.setHours(date.getHours() + userTimezoneOffset);
+            return date;
+        }
         
         function initTheme() {
             const saved = localStorage.getItem('theme') || 'light';
@@ -306,6 +394,73 @@
                 document.documentElement.setAttribute('data-theme', 'dark');
                 document.querySelector('.theme-toggle').textContent = '☀️';
             }
+        }
+
+        async function loadInsights() {
+            const url = selectedUserId ? `/api/stats/insights?telegram_id=${selectedUserId}` : '/api/stats/insights';
+            const res = await fetch(url);
+            const data = await res.json();
+            
+            const container = document.getElementById('insightsContent');
+            if (!data.best_day) {
+                container.innerHTML = '<div class="empty-state">No data yet</div>';
+                return;
+            }
+            
+            container.innerHTML = `
+                <div class="insight-row">
+                    <span class="insight-label">Best Day</span>
+                    <span class="insight-value insight-best">${data.best_day} (${data.avg_by_day[data.best_day]})</span>
+                </div>
+                <div class="insight-row">
+                    <span class="insight-label">Worst Day</span>
+                    <span class="insight-value insight-worst">${data.worst_day} (${data.avg_by_day[data.worst_day]})</span>
+                </div>
+            `;
+        }
+
+        async function loadDistribution() {
+            const url = selectedUserId ? `/api/stats/distribution?telegram_id=${selectedUserId}` : '/api/stats/distribution';
+            const res = await fetch(url);
+            const data = await res.json();
+            
+            const ctx = document.getElementById('distributionChart').getContext('2d');
+            const counts = [data["1"] || 0, data["2"] || 0, data["3"] || 0, data["4"] || 0, data["5"] || 0];
+            
+            if (window.distChart) window.distChart.destroy();
+            
+            window.distChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['1 - Sad', '2 - Down', '3 - Okay', '4 - Good', '5 - Happy'],
+                    datasets: [{
+                        data: counts,
+                        backgroundColor: ['#ffcdd2', '#ffe0b2', '#fff9c4', '#c8e6c9', '#bbdefb'],
+                        borderColor: ['#c62828', '#ef6c00', '#f9a825', '#2e7d32', '#1565c0'],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    cutout: '50%',
+                    radius: '50%',
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    }
+                }
+            });
+        }
+
+        async function exportJSON() {
+            const res = await fetch('/api/export');
+            const data = await res.json();
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'mood_data.json';
+            a.click();
+            URL.revokeObjectURL(url);
         }
         
         function toggleTheme() {
@@ -337,8 +492,11 @@
             if (entries.length > 0) loadEntries();
         }
         
-        async function loadStats() {
-            const res = await fetch('/api/stats');
+        async function loadStats(url) {
+            if (!url) {
+                url = selectedUserId ? `/api/stats?telegram_id=${selectedUserId}` : '/api/stats';
+            }
+            const res = await fetch(url);
             const stats = await res.json();
             document.getElementById('totalCount').textContent = stats.total;
             document.getElementById('avgMood').textContent = stats.avg_mood;
@@ -346,25 +504,98 @@
             document.getElementById('streak').textContent = stats.streak;
         }
         
+        let telegramId = null;
+        let selectedUserId = null;
+
+        function getTelegramUser() {
+            if (window.Telegram && window.Telegram.WebApp) {
+                const webApp = window.Telegram.WebApp;
+                webApp.ready();
+                if (webApp.initDataUnsafe && webApp.initDataUnsafe.user) {
+                    return webApp.initDataUnsafe.user.id;
+                }
+            }
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('telegram_id') ? parseInt(urlParams.get('telegram_id')) : null;
+        }
+
+        async function loadUsers() {
+            const res = await fetch('/api/users');
+            const users = await res.json();
+            
+            const select = document.getElementById('userSelect');
+            users.forEach(user => {
+                const option = document.createElement('option');
+                option.value = user.telegram_id;
+                option.textContent = `User ${user.telegram_id} (${user.entry_count} entries)`;
+                select.appendChild(option);
+            });
+            
+            const urlParams = new URLSearchParams(window.location.search);
+            const filterId = urlParams.get('filter_user');
+            if (filterId) {
+                select.value = filterId;
+                filterByUser(filterId);
+            }
+        }
+
+        function filterByUser(userId) {
+            selectedUserId = userId || null;
+            const url = selectedUserId 
+                ? `/api/stats?telegram_id=${selectedUserId}` 
+                : '/api/stats';
+            loadStats(url);
+            loadEntries();
+            loadDistribution();
+            loadInsights();
+            
+            const label = document.getElementById('currentUserLabel');
+            label.textContent = selectedUserId ? `Viewing User ${selectedUserId}` : '';
+        }
+
+        telegramId = getTelegramUser();
+
         async function loadSettings() {
-            const res = await fetch('/api/settings');
+            const section = document.getElementById('settingsSection');
+            if (!telegramId) {
+                section.innerHTML = `
+                    <h2>Settings</h2>
+                    <p style="color: var(--text-secondary); margin-bottom: 15px;">
+                        Open this app from Telegram to view and edit your personal settings.
+                    </p>
+                    <p style="color: var(--text-muted); font-size: 0.9rem;">
+                        Each user has their own settings including ping intervals, time preferences, and timezone.
+                    </p>
+                `;
+                return;
+            }
+            const res = await fetch(`/api/settings?telegram_id=${telegramId}`);
             const settings = await res.json();
             document.getElementById('pingEnabled').checked = settings.ping_enabled;
             document.getElementById('minInterval').value = settings.min_interval_minutes;
             document.getElementById('maxInterval').value = settings.max_interval_minutes;
             document.getElementById('pingStartHour').value = settings.ping_start_hour ?? '';
             document.getElementById('pingEndHour').value = settings.ping_end_hour ?? '';
+            document.getElementById('timezoneOffset').value = settings.timezone_offset ?? '';
+            userTimezoneOffset = settings.timezone_offset ?? 0;
         }
         
         async function saveSettings() {
+            if (!telegramId) {
+                alert('Please open this app from Telegram to save settings.');
+                return;
+            }
             const startHour = document.getElementById('pingStartHour').value;
             const endHour = document.getElementById('pingEndHour').value;
+            const tzOffset = document.getElementById('timezoneOffset').value;
             const data = {
+                telegram_id: telegramId,
                 ping_enabled: document.getElementById('pingEnabled').checked,
                 min_interval_minutes: parseInt(document.getElementById('minInterval').value),
                 max_interval_minutes: parseInt(document.getElementById('maxInterval').value),
                 ping_start_hour: startHour ? parseInt(startHour) : null,
-                ping_end_hour: endHour ? parseInt(endHour) : null
+                ping_end_hour: endHour ? parseInt(endHour) : null,
+                timezone_offset: tzOffset ? parseInt(tzOffset) : 0
             };
             await fetch('/api/settings', {
                 method: 'POST',
@@ -375,7 +606,9 @@
         }
         
         async function loadEntries() {
-            const res = await fetch('/api/entries');
+            const filterId = selectedUserId || telegramId;
+            const url = filterId ? `/api/entries?telegram_id=${filterId}` : '/api/entries';
+            const res = await fetch(url);
             const entries = await res.json();
             
             const list = document.getElementById('entriesList');
@@ -391,7 +624,7 @@
                         <div><span class="mood-badge mood-${e.mood}">${e.mood}/5</span></div>
                         ${e.note ? `<div class="entry-note">${e.note}</div>` : ''}
                     </div>
-                    <div class="entry-time">${new Date(e.created_at).toLocaleString()}</div>
+                    <div class="entry-time">${toLocalTime(e.created_at).toLocaleString()}</div>
                     <button class="delete-btn" onclick="deleteEntry(${e.id})">Delete</button>
                 </div>
             `).join('');
@@ -417,12 +650,12 @@
             
             for (let i = 0; i < sorted.length; i++) {
                 const entry = sorted[i];
-                const currentTime = new Date(entry.created_at).getTime();
+                const currentTime = toLocalTime(entry.created_at).getTime();
                 
                 if (i === 0) {
                     currentSegment.push({ x: currentTime, y: entry.mood });
                 } else {
-                    const prevTime = new Date(sorted[i - 1].created_at).getTime();
+                    const prevTime = toLocalTime(sorted[i - 1].created_at).getTime();
                     if (currentTime - prevTime > HOUR_MS) {
                         segments.push(currentSegment);
                         currentSegment = [];
@@ -470,10 +703,13 @@
         }
         
         loadStats();
+        loadUsers();
         loadSettings();
         loadEntries();
+        loadInsights();
+        loadDistribution();
         initTheme();
-        setInterval(() => { loadStats(); loadEntries(); }, 30000);
+        setInterval(() => { loadStats(); loadEntries(); loadInsights(); loadDistribution(); }, 30000);
     </script>
 </body>
 </html>

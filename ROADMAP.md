@@ -5,16 +5,16 @@
 - [x] Replace `/skip` command with inline "Skip note" button
 - [x] Add delete entry functionality in web UI
 
-## Phase 2: Data & Analytics
-- [ ] Add mood distribution pie chart
-- [ ] Weekly/monthly summary reports
-- [ ] "Insights" feature (correlate mood with days of week)
-- [ ] CSV/JSON data export
+## Phase 2: Data & Analytics (Done ✅)
+- [x] Add mood distribution pie chart
+- [x] Weekly/monthly summary reports
+- [x] "Insights" feature (correlate mood with days of week)
+- [x] CSV/JSON data export
 
-## Phase 3: Multi-user Support
-- [ ] Add user filter dropdown on dashboard
-- [ ] Per-user dashboard views
-- [ ] User authentication (optional)
+## Phase 3: Multi-user Support (Done ✅)
+- [x] Add user filter dropdown on dashboard
+- [x] Per-user dashboard views
+- [x] User authentication (optional)
 
 ## Phase 4: Enhanced Engagement
 - [ ] Streak protection alerts (notify before streak breaks)
@@ -23,7 +23,6 @@
 - [ ] Browser push notifications for web dashboard
 
 ## Phase 5: Bot Intelligence
-- [ ] Context-aware follow-ups after low mood entries
 - [ ] Quick reply templates for notes
 - [ ] Daily/weekly summary from bot
 
@@ -31,3 +30,8 @@
 - [ ] Convert web dashboard to PWA
 - [ ] Add manifest.json and service worker
 - [ ] Mobile-optimized UI improvements
+
+# Bugs
+- [x] /interval bot command is not persisting
+- [x] /pinghours is not persisting
+- [x] manually hitting /mood doesn't seem to be updating the "last recorded mood" state. I just got a scheduled ping a few minutes after hitting a manual mood

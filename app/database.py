@@ -1,9 +1,12 @@
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
 from datetime import datetime
+from typing import Optional
 
-Base = declarative_base()
+from sqlalchemy import create_engine, Integer, String, DateTime, Boolean, func
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, Session, sessionmaker
+
+
+class Base(DeclarativeBase):
+    pass
 
 engine = create_engine("sqlite:///checkpoint.db")
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -11,38 +14,40 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 class Entry(Base):
     __tablename__ = "entries"
-    id = Column(Integer, primary_key=True, index=True)
-    telegram_id = Column(Integer, nullable=False)
-    mood = Column(Integer, nullable=False)
-    note = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    telegram_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    mood: Mapped[int] = mapped_column(Integer, nullable=False)
+    note: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class Settings(Base):
     __tablename__ = "settings"
-    id = Column(Integer, primary_key=True, index=True)
-    telegram_id = Column(Integer, unique=True, nullable=False)
-    ping_enabled = Column(Boolean, default=True)
-    min_interval_minutes = Column(Integer, default=30)
-    max_interval_minutes = Column(Integer, default=120)
-    ping_start_hour = Column(Integer, nullable=True)
-    ping_end_hour = Column(Integer, nullable=True)
-    timezone_offset = Column(Integer, default=0)
-    last_ping = Column(DateTime, nullable=True)
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    telegram_id: Mapped[int] = mapped_column(Integer, unique=True, nullable=False)
+    ping_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    min_interval_minutes: Mapped[int] = mapped_column(Integer, default=30)
+    max_interval_minutes: Mapped[int] = mapped_column(Integer, default=120)
+    ping_start_hour: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    ping_end_hour: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    timezone_offset: Mapped[int] = mapped_column(Integer, default=0)
+    last_ping: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
 Base.metadata.create_all(bind=engine)
 
 
 def get_db():
-    db = SessionLocal()
+    db = Session()
     try:
         yield db
     finally:
         db.close()
 
 
-def get_or_create_settings(db, telegram_id):
+def get_or_create_settings(db: Session, telegram_id: int) -> Settings:
     settings = db.query(Settings).filter(Settings.telegram_id == telegram_id).first()
     if not settings:
         settings = Settings(telegram_id=telegram_id)

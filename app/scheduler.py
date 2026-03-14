@@ -2,6 +2,7 @@ import os
 import random
 from datetime import datetime
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from sqlalchemy import select
 from app.database import SessionLocal, Settings
 
 MOOD_EMOJIS = {1: "😢", 2: "😕", 3: "😐", 4: "🙂", 5: "😄"}
@@ -10,7 +11,7 @@ MOOD_EMOJIS = {1: "😢", 2: "😕", 3: "😐", 4: "🙂", 5: "😄"}
 async def ping_users(bot):
     db = SessionLocal()
     try:
-        settings_list = db.query(Settings).filter(Settings.ping_enabled == True).all()
+        settings_list = db.execute(select(Settings).where(Settings.ping_enabled == True)).scalars().all()
         if not settings_list:
             return
         

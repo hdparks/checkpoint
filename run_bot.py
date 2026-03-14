@@ -15,6 +15,7 @@ if not TOKEN or TOKEN == "your_bot_token_here":
 
 from app.bot import (
     start_command,
+    myid_command,
     ping_command,
     mood_command,
     handle_callback,
@@ -24,6 +25,9 @@ from app.bot import (
     ping_on_command,
     ping_off_command,
     interval_command,
+    pinghours_command,
+    timezone_command,
+    tzlist_command,
     skip_command,
 )
 
@@ -34,6 +38,7 @@ def run_bot():
     application = Application.builder().token(TOKEN).build()
     
     application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("myid", myid_command))
     application.add_handler(CommandHandler("ping", ping_command))
     application.add_handler(CommandHandler("mood", mood_command))
     application.add_handler(CommandHandler("stats", stats_command))
@@ -41,6 +46,9 @@ def run_bot():
     application.add_handler(CommandHandler("ping_on", ping_on_command))
     application.add_handler(CommandHandler("ping_off", ping_off_command))
     application.add_handler(CommandHandler("interval", interval_command))
+    application.add_handler(CommandHandler("pinghours", pinghours_command))
+    application.add_handler(CommandHandler("timezone", timezone_command))
+    application.add_handler(CommandHandler("tzlist", tzlist_command))
     application.add_handler(CommandHandler("skip", skip_command))
     application.add_handler(CallbackQueryHandler(handle_callback))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))

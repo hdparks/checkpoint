@@ -3,6 +3,7 @@ import asyncio
 from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
+from sqlalchemy import select
 from app.database import Entry, Settings, get_db, get_or_create_settings, SessionLocal
 
 TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
@@ -39,6 +40,13 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def ping_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    db = SessionLocal()
+    try:
+        settings = get_or_create_settings(db, update.effective_user.id)
+        settings.last_ping = datetime.utcnow()
+        db.commit()
+    finally:
+        db.close()
     await send_mood_prompt(update.effective_user.id)
 
 
@@ -51,6 +59,13 @@ async def send_mood_prompt(telegram_id, bot=None):
 
 
 async def mood_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    db = SessionLocal()
+    try:
+        settings = get_or_create_settings(db, update.effective_user.id)
+        settings.last_ping = datetime.utcnow()
+        db.commit()
+    finally:
+        db.close()
     keyboard = InlineKeyboardMarkup(MOOD_OPTIONS)
     await update.message.reply_text("How are you feeling?", reply_markup=keyboard)
 
@@ -67,6 +82,10 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             entry = Entry(telegram_id=update.effective_user.id, mood=mood)
             db.add(entry)
+            
+            settings = get_or_create_settings(db, update.effective_user.id)
+            settings.last_ping = datetime.utcnow()
+            
             db.commit()
             db.refresh(entry)
             
@@ -81,7 +100,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if entry_id:
             db = SessionLocal()
             try:
-                entry = db.query(Entry).filter(Entry.id == entry_id).first()
+                entry = db.execute(select(Entry).where(Entry.id == entry_id)).scalars().first()
                 if entry:
                     await query.message.edit_text(f"Logged: {MOOD_EMOJIS[entry.mood]} {entry.mood}/5")
             finally:
@@ -94,7 +113,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             entry_id = context.user_data.get("pending_entry_id")
             if entry_id:
-                entry = db.query(Entry).filter(Entry.id == entry_id).first()
+                entry = db.execute(select(Entry).where(Entry.id == entry_id)).scalars().first()
                 if entry:
                     entry.note = update.message.text
                     db.commit()
@@ -112,7 +131,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db = SessionLocal()
     try:
-        entries = db.query(Entry).filter(Entry.telegram_id == update.effective_user.id).all()
+        entries = db.execute(select(Entry).where(Entry.telegram_id == update.effective_user.id)).scalars().all()
         if not entries:
             await update.message.reply_text("No entries yet. Use /mood to log your first mood!")
             return
@@ -316,8 +335,13 @@ async def skip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("No pending note to skip.")
 
 
+async def myid_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(f"Your Telegram ID: {update.effective_user.id}")
+
+
 def run_bot(application):
     application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("myid", myid_command))
     application.add_handler(CommandHandler("ping", ping_command))
     application.add_handler(CommandHandler("mood", mood_command))
     application.add_handler(CommandHandler("stats", stats_command))
