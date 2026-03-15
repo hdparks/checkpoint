@@ -1,10 +1,10 @@
+"""Telegram bot for daily mood check-ins."""
 import os
-import asyncio
 from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
+from telegram.ext import CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from sqlalchemy import select
-from app.database import Entry, Settings, get_db, get_or_create_settings, SessionLocal
+from app.database import Entry, get_or_create_settings, SESSION_LOCAL
 
 TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
 
@@ -17,8 +17,9 @@ SKIP_OPTIONS = InlineKeyboardMarkup([
 ])
 
 
-async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    db = SessionLocal()
+async def start_command(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    """Handle /start command - show welcome message and available commands."""
+    db = SESSION_LOCAL()
     try:
         get_or_create_settings(db, update.effective_user.id)
         await update.message.reply_text(
@@ -39,8 +40,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db.close()
 
 
-async def ping_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    db = SessionLocal()
+async def ping_command(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    """Handle /ping command - trigger manual check-in."""
+    db = SESSION_LOCAL()
     try:
         settings = get_or_create_settings(db, update.effective_user.id)
         settings.last_ping = datetime.utcnow()
@@ -51,6 +53,7 @@ async def ping_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def send_mood_prompt(telegram_id, bot=None):
+    """Send mood selection keyboard to a user."""
     keyboard = InlineKeyboardMarkup(MOOD_OPTIONS)
     message = "How are you feeling right now?"
     if bot:
@@ -58,8 +61,9 @@ async def send_mood_prompt(telegram_id, bot=None):
     return message, keyboard
 
 
-async def mood_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    db = SessionLocal()
+async def mood_command(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    """Handle /mood command - show mood selection keyboard."""
+    db = SESSION_LOCAL()
     try:
         settings = get_or_create_settings(db, update.effective_user.id)
         settings.last_ping = datetime.utcnow()
@@ -71,45 +75,49 @@ async def mood_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle inline callback queries from button presses."""
     query = update.callback_query
     await query.answer()
-    
+
     if query.data.startswith("mood_"):
         mood = int(query.data.split("_")[1])
-        await query.message.edit_text(f"You selected: {MOOD_EMOJIS[mood]} {mood}/5", reply_markup=SKIP_OPTIONS)
-        
-        db = SessionLocal()
+        text = f"You selected: {MOOD_EMOJIS[mood]} {mood}/5"
+        await query.message.edit_text(text, reply_markup=SKIP_OPTIONS)
+
+        db = SESSION_LOCAL()
         try:
             entry = Entry(telegram_id=update.effective_user.id, mood=mood)
             db.add(entry)
-            
+
             settings = get_or_create_settings(db, update.effective_user.id)
             settings.last_ping = datetime.utcnow()
-            
+
             db.commit()
             db.refresh(entry)
-            
+
             context.user_data["pending_mood"] = mood
             context.user_data["pending_entry_id"] = entry.id
         finally:
             db.close()
         return
-    
+
     if query.data == "skip_note":
         entry_id = context.user_data.get("pending_entry_id")
         if entry_id:
-            db = SessionLocal()
+            db = SESSION_LOCAL()
             try:
                 entry = db.execute(select(Entry).where(Entry.id == entry_id)).scalars().first()
                 if entry:
-                    await query.message.edit_text(f"Logged: {MOOD_EMOJIS[entry.mood]} {entry.mood}/5")
+                    text = f"Logged: {MOOD_EMOJIS[entry.mood]} {entry.mood}/5"
+                    await query.message.edit_text(text)
             finally:
                 db.close()
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle incoming text messages for pending mood notes."""
     if "pending_mood" in context.user_data:
-        db = SessionLocal()
+        db = SESSION_LOCAL()
         try:
             entry_id = context.user_data.get("pending_entry_id")
             if entry_id:
@@ -128,19 +136,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pass
 
 
-async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    db = SessionLocal()
+async def stats_command(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    """Handle /stats command - show user's check-in statistics."""
+    db = SESSION_LOCAL()
     try:
-        entries = db.execute(select(Entry).where(Entry.telegram_id == update.effective_user.id)).scalars().all()
+        user_id = update.effective_user.id
+        entries = db.execute(select(Entry).where(Entry.telegram_id == user_id)).scalars().all()
         if not entries:
             await update.message.reply_text("No entries yet. Use /mood to log your first mood!")
             return
-        
+
         total = len(entries)
         avg_mood = sum(e.mood for e in entries) / total
         today = datetime.utcnow().date()
         today_entries = [e for e in entries if e.created_at.date() == today]
-        
+
         streak = 0
         check_date = today
         while True:
@@ -149,7 +159,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 check_date -= timedelta(days=1)
             else:
                 break
-        
+
         await update.message.reply_text(
             f"📊 Your Stats\n"
             f"━━━━━━━━━━━━━━━━\n"
@@ -162,20 +172,25 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db.close()
 
 
-async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    db = SessionLocal()
+async def settings_command(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    """Handle /settings command - show current settings and change commands."""
+    db = SESSION_LOCAL()
     try:
         settings = get_or_create_settings(db, update.effective_user.id)
-        
+
         status = "ON 🟢" if settings.ping_enabled else "OFF 🔴"
-        ping_hours = f"{settings.ping_start_hour}:00 - {settings.ping_end_hour}:00" if settings.ping_start_hour is not None else "Not set"
+        if settings.ping_start_hour is not None:
+            ping_hours = f"{settings.ping_start_hour}:00 - {settings.ping_end_hour}:00"
+        else:
+            ping_hours = "Not set"
         tz_info = f"UTC{settings.timezone_offset:+d}" if settings.timezone_offset != 0 else "UTC"
-        
+
         await update.message.reply_text(
             f"⚙️ Settings\n"
             f"━━━━━━━━━━━━━━━━\n"
             f"Pings: {status}\n"
-            f"Random interval: {settings.min_interval_minutes}-{settings.max_interval_minutes} minutes\n"
+            f"Random interval: "
+            f"{settings.min_interval_minutes}-{settings.max_interval_minutes} minutes\n"
             f"Ping hours (local): {ping_hours}\n"
             f"Timezone: {tz_info}\n\n"
             f"Commands to change:\n"
@@ -189,8 +204,9 @@ async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db.close()
 
 
-async def ping_on_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    db = SessionLocal()
+async def ping_on_command(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    """Handle /ping_on command - enable scheduled pings."""
+    db = SESSION_LOCAL()
     try:
         settings = get_or_create_settings(db, update.effective_user.id)
         settings.ping_enabled = True
@@ -200,8 +216,9 @@ async def ping_on_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db.close()
 
 
-async def ping_off_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    db = SessionLocal()
+async def ping_off_command(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    """Handle /ping_off command - disable scheduled pings."""
+    db = SESSION_LOCAL()
     try:
         settings = get_or_create_settings(db, update.effective_user.id)
         settings.ping_enabled = False
@@ -212,18 +229,21 @@ async def ping_off_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def interval_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /interval command - set ping interval range."""
     if len(context.args) != 2:
-        await update.message.reply_text("Usage: /interval [min_minutes] [max_minutes]\nExample: /interval 30 60")
+        await update.message.reply_text(
+            "Usage: /interval [min_minutes] [max_minutes]\nExample: /interval 30 60"
+        )
         return
-    
+
     try:
         min_h = int(context.args[0])
         max_h = int(context.args[1])
     except ValueError:
         await update.message.reply_text("Please enter valid numbers.")
         return
-    
-    db = SessionLocal()
+
+    db = SESSION_LOCAL()
     try:
         settings = get_or_create_settings(db, update.effective_user.id)
         settings.min_interval_minutes = min_h
@@ -235,28 +255,33 @@ async def interval_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def pinghours_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /pinghours command - set allowed hours for pings."""
     if len(context.args) != 2:
-        await update.message.reply_text("Usage: /pinghours [start_hour] [end_hour]\nExample: /pinghours 9 17\nUse 22 6 for overnight (10pm-6am)")
+        await update.message.reply_text(
+            "Usage: /pinghours [start_hour] [end_hour]\n"
+            "Example: /pinghours 9 17\n"
+            "Use 22 6 for overnight (10pm-6am)"
+        )
         return
-    
+
     try:
         start_h = int(context.args[0])
         end_h = int(context.args[1])
     except ValueError:
         await update.message.reply_text("Please enter valid hours (0-23).")
         return
-    
+
     if not (0 <= start_h <= 23 and 0 <= end_h <= 23):
         await update.message.reply_text("Hours must be between 0 and 23.")
         return
-    
-    db = SessionLocal()
+
+    db = SESSION_LOCAL()
     try:
         settings = get_or_create_settings(db, update.effective_user.id)
         settings.ping_start_hour = start_h
         settings.ping_end_hour = end_h
         db.commit()
-        
+
         if start_h <= end_h:
             range_desc = f"{start_h}:00 - {end_h}:00"
         else:
@@ -267,21 +292,26 @@ async def pinghours_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def timezone_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /timezone command - set UTC offset for user."""
     if len(context.args) != 1:
-        await update.message.reply_text("Usage: /timezone [offset]\nExample: /timezone -5 for EST\n/tzlist to see available offsets")
+        await update.message.reply_text(
+            "Usage: /timezone [offset]\n"
+            "Example: /timezone -5 for EST\n"
+            "/tzlist to see available offsets"
+        )
         return
-    
+
     try:
         offset = int(context.args[0])
     except ValueError:
         await update.message.reply_text("Please enter a valid integer (e.g., -5, 0, 8).")
         return
-    
-    if not (-12 <= offset <= 14):
+
+    if offset < -12 or offset > 14:
         await update.message.reply_text("Offset must be between -12 and +14.")
         return
-    
-    db = SessionLocal()
+
+    db = SESSION_LOCAL()
     try:
         settings = get_or_create_settings(db, update.effective_user.id)
         settings.timezone_offset = offset
@@ -291,7 +321,8 @@ async def timezone_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db.close()
 
 
-async def tzlist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def tzlist_command(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    """Handle /tzlist command - show common UTC timezone offsets."""
     common_offsets = [
         (-12, "-12 (Baker Island)"),
         (-11, "-11 (American Samoa)"),
@@ -328,6 +359,7 @@ async def tzlist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def skip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /skip command - skip pending note entry."""
     if "pending_entry_id" in context.user_data:
         context.user_data.clear()
         await update.message.reply_text("Note skipped!")
@@ -335,11 +367,13 @@ async def skip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("No pending note to skip.")
 
 
-async def myid_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def myid_command(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    """Handle /myid command - show user's Telegram ID."""
     await update.message.reply_text(f"Your Telegram ID: {update.effective_user.id}")
 
 
 def run_bot(application):
+    """Register all command and message handlers with the application."""
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("myid", myid_command))
     application.add_handler(CommandHandler("ping", ping_command))
@@ -355,5 +389,5 @@ def run_bot(application):
     application.add_handler(CommandHandler("skip", skip_command))
     application.add_handler(CallbackQueryHandler(handle_callback))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    
+
     application.run_polling()

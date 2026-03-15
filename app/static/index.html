@@ -288,7 +288,7 @@
             </div>
             <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">🌙</button>
         </header>
-        
+
         <div class="user-filter">
             <label for="userSelect">Filter by User:</label>
             <select id="userSelect" onchange="filterByUser(this.value)">
@@ -296,7 +296,7 @@
             </select>
             <span id="currentUserLabel" style="color: var(--text-muted); font-size: 0.9rem;"></span>
         </div>
-        
+
         <div class="stats-grid">
             <div class="stat-card">
                 <h3>Total Check-ins</h3>
@@ -315,14 +315,14 @@
                 <div class="value" id="streak">0</div>
             </div>
         </div>
-        
+
         <div class="insights-card">
             <h2>Insights</h2>
             <div id="insightsContent">
                 <div class="empty-state">No data yet</div>
             </div>
         </div>
-        
+
         <div class="grid-2">
             <div class="card">
                 <h2>Mood Distribution</h2>
@@ -363,12 +363,12 @@
                 </div>
             </div>
         </div>
-        
+
         <div class="card" style="margin-bottom: 30px;">
             <h2>Mood Over Time</h2>
             <canvas id="moodChart" height="100"></canvas>
         </div>
-        
+
         <div class="card">
             <h2>Recent Entries</h2>
             <div class="entries-list" id="entriesList">
@@ -376,7 +376,7 @@
             </div>
         </div>
     </div>
-    
+
     <script>
         const MOOD_EMOJIS = {1: '😢', 2: '😕', 3: '😐', 4: '🙂', 5: '😄'};
         let chart = null;
@@ -387,7 +387,7 @@
             date.setHours(date.getHours() + userTimezoneOffset);
             return date;
         }
-        
+
         function initTheme() {
             const saved = localStorage.getItem('theme') || 'light';
             if (saved === 'dark') {
@@ -400,13 +400,13 @@
             const url = selectedUserId ? `/api/stats/insights?telegram_id=${selectedUserId}` : '/api/stats/insights';
             const res = await fetch(url);
             const data = await res.json();
-            
+
             const container = document.getElementById('insightsContent');
             if (!data.best_day) {
                 container.innerHTML = '<div class="empty-state">No data yet</div>';
                 return;
             }
-            
+
             container.innerHTML = `
                 <div class="insight-row">
                     <span class="insight-label">Best Day</span>
@@ -423,12 +423,12 @@
             const url = selectedUserId ? `/api/stats/distribution?telegram_id=${selectedUserId}` : '/api/stats/distribution';
             const res = await fetch(url);
             const data = await res.json();
-            
+
             const ctx = document.getElementById('distributionChart').getContext('2d');
             const counts = [data["1"] || 0, data["2"] || 0, data["3"] || 0, data["4"] || 0, data["5"] || 0];
-            
+
             if (window.distChart) window.distChart.destroy();
-            
+
             window.distChart = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
@@ -462,7 +462,7 @@
             a.click();
             URL.revokeObjectURL(url);
         }
-        
+
         function toggleTheme() {
             const current = document.documentElement.getAttribute('data-theme');
             const toggle = document.querySelector('.theme-toggle');
@@ -477,7 +477,7 @@
             }
             updateChartColors();
         }
-        
+
         function getChartColors() {
             const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
             return {
@@ -486,12 +486,12 @@
                 text: isDark ? '#e0e0e0' : '#333'
             };
         }
-        
+
         function updateChartColors() {
             const entries = document.querySelectorAll('.entry');
             if (entries.length > 0) loadEntries();
         }
-        
+
         async function loadStats(url) {
             if (!url) {
                 url = selectedUserId ? `/api/stats?telegram_id=${selectedUserId}` : '/api/stats';
@@ -503,7 +503,7 @@
             document.getElementById('todayCount').textContent = stats.today;
             document.getElementById('streak').textContent = stats.streak;
         }
-        
+
         let telegramId = null;
         let selectedUserId = null;
 
@@ -522,7 +522,7 @@
         async function loadUsers() {
             const res = await fetch('/api/users');
             const users = await res.json();
-            
+
             const select = document.getElementById('userSelect');
             users.forEach(user => {
                 const option = document.createElement('option');
@@ -530,7 +530,7 @@
                 option.textContent = `User ${user.telegram_id} (${user.entry_count} entries)`;
                 select.appendChild(option);
             });
-            
+
             const urlParams = new URLSearchParams(window.location.search);
             const filterId = urlParams.get('filter_user');
             if (filterId) {
@@ -548,7 +548,7 @@
             loadEntries();
             loadDistribution();
             loadInsights();
-            
+
             const label = document.getElementById('currentUserLabel');
             label.textContent = selectedUserId ? `Viewing User ${selectedUserId}` : '';
         }
@@ -579,7 +579,7 @@
             document.getElementById('timezoneOffset').value = settings.timezone_offset ?? '';
             userTimezoneOffset = settings.timezone_offset ?? 0;
         }
-        
+
         async function saveSettings() {
             if (!telegramId) {
                 alert('Please open this app from Telegram to save settings.');
@@ -604,19 +604,19 @@
             });
             alert('Settings saved!');
         }
-        
+
         async function loadEntries() {
             const filterId = selectedUserId || telegramId;
             const url = filterId ? `/api/entries?telegram_id=${filterId}` : '/api/entries';
             const res = await fetch(url);
             const entries = await res.json();
-            
+
             const list = document.getElementById('entriesList');
             if (entries.length === 0) {
                 list.innerHTML = '<div class="empty-state">No entries yet</div>';
                 return;
             }
-            
+
             list.innerHTML = entries.map(e => `
                 <div class="entry">
                     <span class="mood-emoji">${MOOD_EMOJIS[e.mood]}</span>
@@ -628,30 +628,30 @@
                     <button class="delete-btn" onclick="deleteEntry(${e.id})">Delete</button>
                 </div>
             `).join('');
-            
+
             updateChart(entries);
         }
-        
+
         async function deleteEntry(id) {
             if (!confirm('Delete this entry?')) return;
             await fetch('/api/entries/' + id, { method: 'DELETE' });
             loadEntries();
             loadStats();
         }
-        
+
         function updateChart(entries) {
             const sorted = [...entries].reverse().slice(-30);
             if (sorted.length === 0) return;
-            
+
             const HOUR_MS = 60 * 60 * 1000;
-            
+
             const segments = [];
             let currentSegment = [];
-            
+
             for (let i = 0; i < sorted.length; i++) {
                 const entry = sorted[i];
                 const currentTime = toLocalTime(entry.created_at).getTime();
-                
+
                 if (i === 0) {
                     currentSegment.push({ x: currentTime, y: entry.mood });
                 } else {
@@ -664,9 +664,9 @@
                 }
             }
             if (currentSegment.length > 0) segments.push(currentSegment);
-            
+
             if (chart) chart.destroy();
-            
+
             const ctx = document.getElementById('moodChart').getContext('2d');
             chart = new Chart(ctx, {
                 type: 'line',
@@ -701,7 +701,7 @@
                 }
             });
         }
-        
+
         loadStats();
         loadUsers();
         loadSettings();
