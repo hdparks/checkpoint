@@ -136,6 +136,10 @@
             transition: border-color 0.3s;
         }
         .entry:last-child { border-bottom: none; }
+        .entry.highlighted {
+            background: rgba(102, 126, 234, 0.15);
+            border-left: 3px solid #667eea;
+        }
         .mood-emoji {
             font-size: 1.8rem;
         }
@@ -435,7 +439,7 @@
                     labels: ['1 - Sad', '2 - Down', '3 - Okay', '4 - Good', '5 - Happy'],
                     datasets: [{
                         data: counts,
-                        backgroundColor: ['#ffcdd2', '#ffe0b2', '#fff9c4', '#c8e6c9', '#bbdefb'],
+                        backgroundColor: ['#ef5350', '#ff9800', '#ffeb3b', '#4caf50', '#42a5f5'],
                         borderColor: ['#c62828', '#ef6c00', '#f9a825', '#2e7d32', '#1565c0'],
                         borderWidth: 2
                     }]
@@ -445,7 +449,14 @@
                     cutout: '50%',
                     radius: '50%',
                     plugins: {
-                        legend: { position: 'bottom' }
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                boxWidth: 12,
+                                padding: 10,
+                                font: { size: 11 }
+                            }
+                        }
                     }
                 }
             });
@@ -618,7 +629,7 @@
             }
 
             list.innerHTML = entries.map(e => `
-                <div class="entry">
+                <div class="entry" data-id="${e.id}">
                     <span class="mood-emoji">${MOOD_EMOJIS[e.mood]}</span>
                     <div class="entry-content">
                         <div><span class="mood-badge mood-${e.mood}">${e.mood}/5</span></div>
@@ -629,7 +640,43 @@
                 </div>
             `).join('');
 
+            attachEntryHoverHandlers();
             updateChart(entries);
+        }
+
+        function attachEntryHoverHandlers() {
+            const entries = document.querySelectorAll('.entry');
+            entries.forEach(entry => {
+                entry.addEventListener('mouseenter', () => {
+                    const entryId = parseInt(entry.dataset.id);
+                    highlightChartPoint(entryId);
+                    entry.classList.add('highlighted');
+                });
+                entry.addEventListener('mouseleave', () => {
+                    clearChartHighlight();
+                    entry.classList.remove('highlighted');
+                });
+            });
+        }
+
+        function highlightChartPoint(entryId) {
+            if (!chart) return;
+            for (let datasetIndex = 0; datasetIndex < chart.data.datasets.length; datasetIndex++) {
+                const dataset = chart.data.datasets[datasetIndex];
+                for (let index = 0; index < dataset.data.length; index++) {
+                    if (dataset.data[index].entryId === entryId) {
+                        chart.setActiveElements([{ datasetIndex, index }]);
+                        chart.update();
+                        return;
+                    }
+                }
+            }
+        }
+
+        function clearChartHighlight() {
+            if (!chart) return;
+            chart.setActiveElements([]);
+            chart.update();
         }
 
         async function deleteEntry(id) {
@@ -653,14 +700,14 @@
                 const currentTime = toLocalTime(entry.created_at).getTime();
 
                 if (i === 0) {
-                    currentSegment.push({ x: currentTime, y: entry.mood });
+                    currentSegment.push({ x: currentTime, y: entry.mood, entryId: entry.id });
                 } else {
                     const prevTime = toLocalTime(sorted[i - 1].created_at).getTime();
                     if (currentTime - prevTime > HOUR_MS) {
                         segments.push(currentSegment);
                         currentSegment = [];
                     }
-                    currentSegment.push({ x: currentTime, y: entry.mood });
+                    currentSegment.push({ x: currentTime, y: entry.mood, entryId: entry.id });
                 }
             }
             if (currentSegment.length > 0) segments.push(currentSegment);
@@ -677,7 +724,10 @@
                         borderColor: '#667eea',
                         backgroundColor: 'rgba(102, 126, 234, 0.1)',
                         fill: true,
-                        stepped: 'after'
+                        stepped: 'after',
+                        pointRadius: 4,
+                        pointHoverRadius: 8,
+                        pointHoverBackgroundColor: '#667eea'
                     }))
                 },
                 options: {
@@ -697,6 +747,26 @@
                             }
                         },
                         y: { min: 0, max: 5, ticks: { stepSize: 1 } }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    onHover: (event, elements) => {
+                        if (elements.length > 0) {
+                            const { datasetIndex, index } = elements[0];
+                            const dataPoint = chart.data.datasets[datasetIndex].data[index];
+                            if (dataPoint && dataPoint.entryId) {
+                                const entryId = dataPoint.entryId;
+                                const entryEl = document.querySelector(`.entry[data-id="${entryId}"]`);
+                                if (entryEl) {
+                                    document.querySelectorAll('.entry').forEach(e => e.classList.remove('highlighted'));
+                                    entryEl.classList.add('highlighted');
+                                    entryEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                                }
+                            }
+                        } else {
+                            document.querySelectorAll('.entry').forEach(e => e.classList.remove('highlighted'));
+                        }
                     }
                 }
             });

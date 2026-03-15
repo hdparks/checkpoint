@@ -44,7 +44,7 @@ Base.metadata.create_all(bind=engine)
 
 def get_db():
     """Yield database session for dependency injection."""
-    db = Session()
+    db = SESSION_LOCAL()
     try:
         yield db
     finally:
