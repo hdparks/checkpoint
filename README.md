@@ -88,6 +88,25 @@ Access at http://localhost:8000 to see:
 └── requirements.txt    # Python dependencies
 ```
 
+## Deployment
+
+The app is deployed to Fly.io and automatically deploys on pushes to `main`.
+
+### First-time Setup
+
+1. Generate a deploy token:
+   ```bash
+   fly tokens create deploy -x 999999h
+   ```
+2. Go to your repo's **Settings → Secrets and variables → Actions**
+3. Create a new secret named `FLY_API_TOKEN` with the token from step 1
+
+### Manual Deploy
+
+```bash
+flyctl deploy --remote-only
+```
+
 ## Development
 
 ```bash
