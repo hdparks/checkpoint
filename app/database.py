@@ -1,4 +1,5 @@
 """Database models and session management."""
+import os
 from datetime import datetime
 from typing import Optional
 
@@ -9,7 +10,8 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, Session, sess
 class Base(DeclarativeBase):
     """Base class for all database models."""
 
-engine = create_engine("sqlite:///checkpoint.db")
+DB_PATH = os.environ.get("DB_PATH", "/data/checkpoint.db")
+engine = create_engine(f"sqlite:///{DB_PATH}")
 SESSION_LOCAL = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
